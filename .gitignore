@@ -22,3 +22,6 @@ Thumbs.db
 
 # Logs
 *.log
+# Type checker cache
+.mypy_cache/
+.venv/
