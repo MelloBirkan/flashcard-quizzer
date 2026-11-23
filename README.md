@@ -242,7 +242,3 @@ ai_guidance/  prompting and code review guides
 - Typing `exit` or `quit` ends the quiz, except on a card whose correct answer is that word.
 - History is keyed by card front, so two cards with the same front share one history record.
 - Very old Windows consoles may print ANSI codes literally; use `--no-color` there.
-
-## License
-
-[License](../../LICENSE.txt)
