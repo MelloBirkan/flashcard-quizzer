@@ -29,9 +29,7 @@ def colorize(text: str, color: Color, enabled: bool = True) -> str:
     return f"{color.value}{text}{RESET}" if enabled else text
 
 
-def supports_color(
-    stream: TextIO, environ: Optional[Mapping[str, str]] = None
-) -> bool:
+def supports_color(stream: TextIO, environ: Optional[Mapping[str, str]] = None) -> bool:
     """Decide whether to colour output written to ``stream``.
 
     Colour is used only for an interactive terminal, and never when the

@@ -12,7 +12,7 @@ from typing import Callable, Optional, TextIO
 
 from history import CardRecord
 from models import AnswerResult, Flashcard
-from quiz_engine import QuizSession
+from quiz_engine import QuizSession, is_correct
 from stats import SessionStats
 from utils.colors import Color, colorize
 from utils.table import format_table
@@ -53,10 +53,15 @@ class ConsoleUI:
         noun = "card" if card_count == 1 else "cards"
         self._print(colorize("Flashcard Quizzer", Color.BOLD, self._color))
         self._print(f"Deck: {deck_name} ({card_count} {noun}) | Mode: {mode_name}")
-        self._print("Type your answer and press Enter. Type 'exit' or press Ctrl+C to stop.")
+        self._print(
+            "Type your answer and press Enter. Type 'exit' or press Ctrl+C to stop."
+        )
 
     def ask(self, number: int, card: Flashcard) -> Optional[str]:
         """Show a card's front and read the answer.
+
+        An exit command (``exit``/``quit``) stops the quiz unless it is the
+        card's correct answer, so a card whose back is "exit" still works.
 
         Returns:
             The answer as typed, or ``None`` if the user typed an exit command.
@@ -66,9 +71,13 @@ class ConsoleUI:
                 :func:`run_quiz` treats both as "stop".
         """
         self._print("")
-        self._print(colorize(f"Question {number}:", Color.BOLD, self._color) + f" {card.front}")
+        self._print(
+            colorize(f"Question {number}:", Color.BOLD, self._color) + f" {card.front}"
+        )
         answer = self._input("Your answer: ")
-        if answer.strip().casefold() in EXIT_COMMANDS:
+        if answer.strip().casefold() in EXIT_COMMANDS and not is_correct(
+            answer, card.back
+        ):
             return None
         return answer
 
@@ -85,7 +94,7 @@ class ConsoleUI:
         self._print("")
         title = "Session Summary" + (" (stopped early)" if stopped_early else "")
         self._print(colorize(title, Color.BOLD, self._color))
-        rows = [
+        rows: list[list[object]] = [
             ["Total Questions", stats.total_questions],
             ["Correct", stats.correct_count],
             ["Incorrect", stats.incorrect_count],
@@ -100,7 +109,9 @@ class ConsoleUI:
             missed = [[card.front, card.back] for card in stats.missed_cards]
             self._print(format_table(["Term", "Correct answer"], missed))
         else:
-            self._print(colorize("No missed terms. Perfect score!", Color.GREEN, self._color))
+            self._print(
+                colorize("No missed terms. Perfect score!", Color.GREEN, self._color)
+            )
 
     # --- Lifetime stats -------------------------------------------------------
 
@@ -131,7 +142,9 @@ class ConsoleUI:
 
     def show_warning(self, message: str) -> None:
         """Print a warning to the error stream."""
-        self._print(colorize(f"Warning: {message}", Color.YELLOW, self._color), self._err)
+        self._print(
+            colorize(f"Warning: {message}", Color.YELLOW, self._color), self._err
+        )
 
     def show_error(self, message: str) -> None:
         """Print an error to the error stream."""

@@ -10,6 +10,9 @@ Two deck formats are supported:
 
        {"cards": [{"front": "DNS", "back": "Domain Name System"}, ...]}
 
+Text may not contain control characters (tabs, line breaks, terminal escape
+codes), because cards are printed straight to the terminal.
+
 Every problem, from a missing file to a card without a ``back``, is reported
 as a :class:`FlashcardLoadError` with a one-line message that names the file
 and, where relevant, the card number (counting from 1).
@@ -17,6 +20,7 @@ and, where relevant, the card number (counting from 1).
 
 from __future__ import annotations
 
+import unicodedata
 from typing import Any
 
 from models import Flashcard
@@ -112,9 +116,23 @@ def _parse_card(raw: Any, number: int) -> Flashcard:
             )
         if not value.strip():
             raise FlashcardLoadError(f'card {number}: "{field}" must not be empty')
+        if _has_control_characters(value.strip()):
+            raise FlashcardLoadError(
+                f'card {number}: "{field}" contains control characters '
+                "(such as tabs, line breaks or terminal escape codes)"
+            )
         values[field] = value.strip()
 
     return Flashcard(front=values["front"], back=values["back"])
+
+
+def _has_control_characters(text: str) -> bool:
+    """True if ``text`` holds control characters such as ESC, tab or newline.
+
+    Printing a deck's text verbatim is only safe without them: an escape
+    sequence from an untrusted deck could rewrite the user's terminal.
+    """
+    return any(unicodedata.category(char) == "Cc" for char in text)
 
 
 def _json_type(value: Any) -> str:

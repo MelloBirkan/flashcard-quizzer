@@ -22,18 +22,26 @@ from stats import SessionStats
 @pytest.fixture
 def stats() -> SessionStats:
     session = SessionStats()
-    session.record(AnswerResult(Flashcard("API", "Application Programming Interface"), "api", False))
-    session.record(AnswerResult(Flashcard("IP", "Internet Protocol"), "internet protocol", True))
+    session.record(
+        AnswerResult(
+            Flashcard("API", "Application Programming Interface"), "api", False
+        )
+    )
+    session.record(
+        AnswerResult(Flashcard("IP", "Internet Protocol"), "internet protocol", True)
+    )
     return session
 
 
 @pytest.mark.parametrize(
     ("name", "expected"),
-    [("out.csv", CsvExporter), ("OUT.CSV", CsvExporter), ("a/b/out.json", JsonExporter)],
+    [
+        ("out.csv", CsvExporter),
+        ("OUT.CSV", CsvExporter),
+        ("a/b/out.json", JsonExporter),
+    ],
 )
-def test_factory_picks_exporter_by_extension(
-    name: str, expected: type[object]
-) -> None:
+def test_factory_picks_exporter_by_extension(name: str, expected: type[object]) -> None:
     assert type(ExporterFactory.for_path(name)) is expected
 
 

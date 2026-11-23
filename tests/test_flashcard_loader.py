@@ -171,6 +171,9 @@ def test_parse_rejects_bad_structure(content: Any, expected: str) -> None:
         ({"front": True, "back": "x"}, '"front" must be text, got a boolean'),
         ({"front": "DNS", "back": ["a"]}, '"back" must be text, got a list'),
         ({"front": {"a": 1}, "back": "x"}, '"front" must be text, got an object'),
+        ({"front": "DNS\x1b]0;pwned\x07", "back": "x"}, '"front" contains control'),
+        ({"front": "DNS", "back": "Domain\nName"}, '"back" contains control'),
+        ({"front": "DNS", "back": "Domain\tName"}, '"back" contains control'),
     ],
 )
 def test_parse_rejects_bad_fields(card: dict[str, Any], expected: str) -> None:
@@ -183,3 +186,9 @@ def test_load_error_names_the_file(write_deck: DeckWriter) -> None:
 
     with pytest.raises(FlashcardLoadError, match="broken_deck.json"):
         load_flashcards(path)
+
+
+def test_load_accepts_non_ascii_text(write_deck: DeckWriter) -> None:
+    path = write_deck([{"front": "Straße", "back": "street"}])
+
+    assert load_flashcards(path) == [Flashcard("Straße", "street")]

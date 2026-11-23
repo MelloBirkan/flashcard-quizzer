@@ -84,7 +84,11 @@ def summary_value(output: str, metric: str) -> str:
 def test_full_session(run_cli: CliRunner, deck: Path, tmp_path: Path) -> None:
     """Answer 3 questions (right, wrong, right) and check the final stats."""
     export = tmp_path / "results.json"
-    answers = ["application programming interface", "Control Unit", "DOMAIN NAME SYSTEM"]
+    answers = [
+        "application programming interface",
+        "Control Unit",
+        "DOMAIN NAME SYSTEM",
+    ]
 
     code, out, err = run_cli(
         ["-m", "sequential", "-f", str(deck), "--export", str(export)], answers
@@ -112,12 +116,32 @@ def test_full_session(run_cli: CliRunner, deck: Path, tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("command", ["exit", "  QUIT  ", "Exit"])
 def test_exit_command_stops_quiz(run_cli: CliRunner, deck: Path, command: str) -> None:
-    code, out, _ = run_cli(["-f", str(deck)], ["Application Programming Interface", command])
+    code, out, _ = run_cli(
+        ["-f", str(deck)], ["Application Programming Interface", command]
+    )
 
     assert code == 0
     assert "Session Summary (stopped early)" in out
     assert summary_value(out, "Total Questions") == "1"
     assert summary_value(out, "Accuracy") == "100.0%"
+
+
+def test_exit_is_graded_when_it_is_the_correct_answer(
+    run_cli: CliRunner, write_deck: DeckWriter
+) -> None:
+    deck = write_deck(
+        [
+            {"front": "Which shell builtin leaves the shell?", "back": "exit"},
+            {"front": "Which command prints text?", "back": "echo"},
+        ]
+    )
+
+    code, out, _ = run_cli(["-f", str(deck)], ["EXIT", "quit"])
+
+    assert code == 0
+    assert "Correct!" in out
+    assert "Session Summary (stopped early)" in out
+    assert summary_value(out, "Total Questions") == "1"
 
 
 def test_ctrl_c_stops_quiz_gracefully(run_cli: CliRunner, deck: Path) -> None:
@@ -268,7 +292,11 @@ def test_colored_output_on_a_terminal(
 
     monkeypatch.delenv("NO_COLOR", raising=False)
 
-    _, out, _ = run_cli(["-f", str(deck)], ["Application Programming Interface", "no"], stdout=FakeTerminal())
+    _, out, _ = run_cli(
+        ["-f", str(deck)],
+        ["Application Programming Interface", "no"],
+        stdout=FakeTerminal(),
+    )
 
     assert "\033[32mCorrect!\033[0m" in out
     assert "\033[31mIncorrect." in out
@@ -306,7 +334,10 @@ def test_stats_reports_lifetime_results_worst_first(
     run_cli: CliRunner, deck: Path
 ) -> None:
     run_cli(["-f", str(deck)], ["Application Programming Interface", "no", "no"])
-    run_cli(["-f", str(deck)], ["Application Programming Interface", "Central Processing Unit", "no"])
+    run_cli(
+        ["-f", str(deck)],
+        ["Application Programming Interface", "Central Processing Unit", "no"],
+    )
 
     code, out, _ = run_cli(["-f", str(deck), "--stats"])
 
@@ -317,10 +348,28 @@ def test_stats_reports_lifetime_results_worst_first(
     assert re.search(r"\| DNS +\| +2 \| +0 \| +0\.0% \|", out)
 
 
+def test_stats_ignores_cards_removed_from_the_deck(
+    run_cli: CliRunner, write_deck: DeckWriter
+) -> None:
+    deck = write_deck(THREE_CARD_DECK)
+    run_cli(["-f", str(deck)], ["no", "no", "no"])
+    write_deck(THREE_CARD_DECK[:2])
+
+    _, out, _ = run_cli(["-f", str(deck), "--stats"])
+
+    assert re.findall(r"^\| (API|CPU|DNS) .*$", out, flags=re.MULTILINE) == [
+        "API",
+        "CPU",
+    ]
+
+
 def test_adaptive_mode_starts_with_previously_missed_cards(
     run_cli: CliRunner, deck: Path
 ) -> None:
-    run_cli(["-f", str(deck)], ["Application Programming Interface", "Central Processing Unit", "no"])
+    run_cli(
+        ["-f", str(deck)],
+        ["Application Programming Interface", "Central Processing Unit", "no"],
+    )
 
     _, out, _ = run_cli(["-m", "adaptive", "-f", str(deck)], ["exit"])
 

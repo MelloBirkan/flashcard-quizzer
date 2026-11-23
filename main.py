@@ -41,7 +41,9 @@ def positive_int(text: str) -> int:
     try:
         value = int(text)
     except ValueError:
-        raise argparse.ArgumentTypeError(f"expected a whole number, got {text!r}")
+        raise argparse.ArgumentTypeError(
+            f"expected a whole number, got {text!r}"
+        ) from None
     if value < 1:
         raise argparse.ArgumentTypeError(f"must be 1 or more, got {value}")
     return value
@@ -61,7 +63,7 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         type=Path,
         metavar="DECK",
-        help="JSON deck: a list of {front, back} cards or {\"cards\": [...]}",
+        help='JSON deck: a list of {front, back} cards or {"cards": [...]}',
     )
     parser.add_argument(
         "-m",
@@ -160,15 +162,17 @@ def main(
     deck_name = args.file.name
 
     if args.stats:
-        ui.show_lifetime_stats(
-            deck_name, history.card_records(deck_key), history.sessions_played(deck_key)
-        )
+        # History is keyed by card front; skip cards removed from the deck.
+        fronts = {card.front for card in cards}
+        records = [r for r in history.card_records(deck_key) if r.front in fronts]
+        ui.show_lifetime_stats(deck_name, records, history.sessions_played(deck_key))
         return 0
 
     mode = QuizModeFactory.create(
         args.mode,
         cards,
         limit=args.limit,
+        # Seeded shuffling of flashcards is not a security use of randomness.
         rng=random.Random(args.seed) if args.seed is not None else None,  # nosec B311
         prior_misses=history.miss_counts(deck_key),
     )
