@@ -7,11 +7,13 @@ from types import ModuleType
 
 import pytest
 
+import exporters
 import quiz_engine
 import stats
+from utils import colors, table
 
 
-@pytest.mark.parametrize("module", [quiz_engine, stats])
+@pytest.mark.parametrize("module", [quiz_engine, stats, exporters, colors, table])
 def test_docstring_examples(module: ModuleType) -> None:
     result = doctest.testmod(module, optionflags=doctest.ELLIPSIS)
 

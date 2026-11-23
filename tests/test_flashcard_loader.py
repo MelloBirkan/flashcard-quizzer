@@ -152,6 +152,7 @@ def test_load_unreadable_file(
         ({"cards": {"front": "API"}}, '"cards" must be a list, got an object'),
         (["API"], "card 1 must be an object"),
         ([{"front": "A", "back": "B"}, ["x"]], "card 2 must be an object"),
+        ({1, 2}, "got set"),
     ],
 )
 def test_parse_rejects_bad_structure(content: Any, expected: str) -> None:
