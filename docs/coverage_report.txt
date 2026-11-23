@@ -1,0 +1,24 @@
+Coverage report for the Flashcard Quizzer
+Command: python -m pytest --cov=. --cov-report=term-missing
+Generated: 2026-11-23, Python 3.9.6, pytest 8.4.2
+
+_______________ coverage: platform darwin, python 3.9.6-final-0 ________________
+
+Name                    Stmts   Miss Branch BrPart  Cover   Missing
+-------------------------------------------------------------------
+data_loader.py             65      0     34      0   100%
+exporters.py               53      0      4      0   100%
+history.py                 88      0     22      0   100%
+main.py                    83      0     14      0   100%
+models.py                  11      0      0      0   100%
+quiz_engine.py            118      0     22      0   100%
+stats.py                   32      0      6      0   100%
+ui.py                      80      0     14      0   100%
+utils/__init__.py           0      0      0      0   100%
+utils/colors.py            19      0      2      0   100%
+utils/file_handler.py      44      0      6      0   100%
+utils/table.py             16      0      4      0   100%
+-------------------------------------------------------------------
+TOTAL                     609      0    128      0   100%
+Required test coverage of 80.0% reached. Total coverage: 100.00%
+173 passed in 0.34s

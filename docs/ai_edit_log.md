@@ -1,171 +1,203 @@
 # AI Edit Log
 
-**Instructions:** Use this document to track all your interactions with AI assistants during the project. This log will help you reflect on your AI collaboration process and demonstrate your learning journey.
+> **Draft note:** Claude Code drafted these entries from the session transcript and git history on 2026-11-23. Every failure, finding and fix below really happened and can be traced in `git log`. Rewrite the entries in your own words and add anything you change after your own review before you submit.
 
-## How to Use This Log
+This log records how the Flashcard Quizzer was built with an AI coding agent: what was asked, what the agent produced, what went wrong, and what changed as a result.
 
-For each AI interaction, create a new entry with the following structure:
+**AI tool used throughout:** Claude Code (Claude Opus 5.5) in the Claude desktop app, working in the project folder with permission to run the test and lint tools.
 
-### Entry Template
-```
-## [Date] - [Brief Description]
-
-**Context:** What were you trying to accomplish?
-**AI Tool Used:** Claude/ChatGPT/Copilot/etc.
-**Prompt/Request:** What exactly did you ask the AI?
-**AI Response:** Summary of what the AI generated (don't copy entire code blocks)
-**Changes Made:** What modifications did you make to the AI's suggestions?
-**Reasoning:** Why did you make those changes?
-**Outcome:** What was the final result?
-**Lessons Learned:** What did you learn from this interaction?
-```
+**Workflow:** I gave Claude the full project brief (mission, instructions and rubric) and asked for a plan before any code. After answering its clarifying questions and approving the plan, I chose a "one pass" build: Claude built the app phase by phase, ran the tests and every quality tool after each phase, reviewed its own code against `ai_guidance/code_review_checklist.md`, and fixed what it found. Each phase is a separate git commit.
 
 ---
 
-## Example Entry
+## 2026-11-23 - Turning the brief into a plan (and finding the gaps)
 
-> This entry shows the expected level of detail. It does **not** count toward your five required entries. Delete it before you submit.
+**Context:** Before generating any code I wanted the requirements broken into small phases, with any ambiguity in the brief settled first.
 
-### 2024-01-15 - Flashcard Loader Validation
+**AI Tool Used:** Claude Code, plan mode (read-only)
 
-**Context:** I needed a module that loads flashcards from a JSON file and rejects bad data with a clear message instead of a traceback.
+**Prompt/Request:** I pasted the whole brief: the mission, the "Building the Flashcard Quizzer" instructions with the phases, required tests and Definition of Done, and the rubric. The plan mode setup asked Claude to explore the starter and propose a plan before editing anything.
+
+**AI Response:** Claude read every starter file and checked the environment. It found that the machine has only Python 3.9.6 (`/usr/bin/python3`) and no `python` command, although the brief's commands all use `python`. It also found that none of the quality tools were installed. Instead of guessing, it asked me four questions:
+1. The brief lists a `--stats` flag but never says what it does, while the end-of-quiz summary is required anyway. What should `--stats` do?
+2. Which extra features should be added for the rubric?
+3. Who drafts the log and report?
+4. Should it stop for review after each phase, or build in one pass?
+
+**Changes Made:** My answers shaped the plan:
+- `--stats` became a **lifetime history** report, and adaptive mode uses the same history to ask previously missed cards first.
+- Extras: **CSV/JSON export** (through a second Factory) and **`--limit N`**.
+- Claude would draft all docs for me to rewrite, and build in one pass with a self-review.
+
+Claude added its own defaults to the plan, which I accepted: a `venv/` (as the starter README advises on a personal machine), Python 3.9-compatible syntax, a stdlib-only app, and a trimmed `requirements.txt`.
+
+**Reasoning:** An undefined flag is exactly the kind of gap an AI fills with a confident guess. Settling it up front meant the design, tests and docs all agreed. The trimmed requirements list removes seven packages the app never uses (sphinx, sphinx-rtd-theme, pre-commit, safety, requests, click, pydantic), which makes installation faster for anyone grading the project.
+
+**Outcome:** An approved plan with six phases, a module layout, the behaviour of every flag, and a test list that includes the six required test names.
+
+**Lessons Learned:**
+- Asking for a plan first surfaced a real ambiguity (`--stats`) and an environment problem (no `python` command) before any code depended on them.
+- A good clarifying question comes with options and a recommendation, which made each decision quick.
+
+---
+
+## 2026-11-23 - Data layer: loader, validation and the first tooling surprise
+
+**Context:** Phase 1 of the plan: load decks in both JSON formats and reject bad decks with a friendly message instead of a traceback.
 
 **AI Tool Used:** Claude Code
 
-**Prompt/Request:** "Create `data_loader.py` with a function that loads flashcards from a JSON file. Support both a plain list of `{"front", "back"}` objects and a `{"cards": [...]}` wrapper. Raise a custom exception with a helpful message if the file is missing, the JSON is malformed, or a card has no `back`. Use type hints."
+**Prompt/Request:** From the approved plan: "Loader accepts `[{...}]` or `{"cards": [...]}`. Friendly `FlashcardLoadError` (one line, names file and 1-based card number) for: missing file, path is a directory, unreadable, file over 5 MB, non-UTF-8, malformed JSON (with line/column), wrong top-level type, `cards` not a list, empty deck, card not an object, missing/empty/non-string `front` or `back`."
 
-**AI Response:** Claude generated a `load_flashcards()` function and a `FlashcardLoadError` exception. It handled both JSON formats and a missing file, but it caught every exception with a bare `except:` and only checked for `front`.
+**AI Response:** Claude generated `models.py` (a frozen `Flashcard` dataclass), `utils/file_handler.py` (`read_json` with the size limit, plus `write_json_atomic`), `data_loader.py`, a third deck (`data/git_commands.json`), two broken fixture decks and 39 tests. All 39 passed on the first run, and flake8 and mypy were clean. **isort failed**, though, and not on the new code: it flagged the starter's `.claude/commands/*` scripts. These are Python files without a `.py` extension, which isort finds through their shebang line.
 
-**Changes Made:** 
-- Replaced the bare `except:` with specific `FileNotFoundError` and `json.JSONDecodeError` handlers
-- Added validation that every card has non-empty `front` and `back` strings
-- Added the card's position to the error message so the user can find the bad entry
+**Changes Made:**
+- Added `extend_skip = [".claude"]` to the isort config, with a comment explaining why. These scripts are course tooling, not app code.
+- A test simulates the "unreadable file" case by patching `Path.read_text` to raise `PermissionError`, rather than using `chmod`, so it behaves the same on every file system.
 
-**Reasoning:** 
-- A bare `except:` hides real bugs, including `KeyboardInterrupt`
-- A card without a `back` would break the quiz loop later, far from the cause
-- A message that names the bad card is far easier to act on
+**Reasoning:** The rubric requires every linting tool to pass. Silencing a whole tool would hide real problems, so only the folder that isn't app code is excluded, and the reason is written next to the setting.
 
-**Outcome:** The loader now rejects bad decks with one readable line, and `test_load_missing_required_field` passes.
+**Outcome:** Commit `4a21000`. The required tests `test_load_valid_flashcards_array`, `test_load_invalid_json` and `test_load_missing_required_field` pass.
 
-**Lessons Learned:** 
-- AI covered the happy path well but under-specified the error handling
-- Naming the exact failure cases in the prompt produced better code than asking for "error handling"
-- Each requirement in the prompt should map to a test
+**Lessons Learned:**
+- Run every tool from the first phase. The isort problem came from starter files, not AI code, and would have been confusing to find at the end.
+- Listing each error case in the request produced one test per case, which made coverage easy.
 
 ---
 
-## Your Log Entries
+## 2026-11-23 - Quiz engine: Strategy, Factory and docstring examples that were never run
 
-### [Date] - [Brief Description]
+**Context:** Phase 2: implement `QuizMode` as an abstract base class, with three strategies and a Factory that picks one from the `--mode` string.
 
-**Context:** 
+**AI Tool Used:** Claude Code
 
-**AI Tool Used:** 
+**Prompt/Request:** From the plan: "`QuizMode` ABC with abstract `next_card()` and overridable `record_answer(card, correct)`. One constructor signature so the Factory can build any mode. Adaptive: initial order sorted by lifetime misses; a wrong answer re-queues the card 2 positions ahead; each card repeats at most 2 extra times (guarantees termination). Cards tracked by position so duplicate cards don't collide."
 
-**Prompt/Request:** 
+**AI Response:** Claude wrote `quiz_engine.py` (the strategies, a `QuizModeFactory` whose `register` decorator builds a registry, and `QuizSession` as the Strategy context), `stats.py` and 50 more tests. They include a test that registers a brand-new "reverse" mode without touching the factory, which proves the extensibility claim. All tests passed, but **black wanted to reformat 2 files, and flake8 reported 4 lines over 88 characters**. Two of those lines were inside docstring examples, which black never wraps.
 
-**AI Response:** 
+**Changes Made:**
+- Ran black, then rewrote the two long docstring examples by hand.
+- Added `tests/test_docstrings.py`, which runs every docstring example as a doctest. Nothing had been checking that the examples were true, so they could have drifted silently from the code.
+- Kept the repeat cap in adaptive mode. "Repeat until correct" sounds friendlier, but a user who doesn't know an answer would then be stuck in an endless quiz.
 
-**Changes Made:** 
+**Reasoning:** Documentation that is never executed is a common source of AI errors that look plausible. Running the examples makes them part of the test suite.
 
-**Reasoning:** 
+**Outcome:** Commit `a90e8f4`, with 89 tests passing. `test_quiz_mode_factory` and `test_adaptive_mode_behavior` pass. For the adaptive test, a missed card in a 4-card deck comes back after exactly two other cards (`A, B, C, A, D`).
 
-**Outcome:** 
-
-**Lessons Learned:** 
-
----
-
-### [Date] - [Brief Description]
-
-**Context:** 
-
-**AI Tool Used:** 
-
-**Prompt/Request:** 
-
-**AI Response:** 
-
-**Changes Made:** 
-
-**Reasoning:** 
-
-**Outcome:** 
-
-**Lessons Learned:** 
+**Lessons Learned:**
+- Formatting tools fix code but not docstrings, so long examples need a manual fix.
+- Termination is a requirement worth stating explicitly for any "repeat" behaviour.
 
 ---
 
-## Tips for Effective AI Collaboration
+## 2026-11-23 - CLI integration tests: 10 failures, 2 real bugs
 
-### 1. Be Specific in Your Requests
-- ❌ "Write a function"
-- ✅ "Write a function that validates email addresses using regex, returns a boolean, and includes proper error handling"
+**Context:** Phase 3: argparse CLI, coloured console UI, lifetime history, exporters and `main.py`, plus integration tests that play whole quizzes through `main()` with scripted answers.
 
-### 2. Provide Context
-- Include relevant code snippets
-- Explain the larger goal
-- Mention any constraints or requirements
+**AI Tool Used:** Claude Code
 
-### 3. Review and Understand
-- Never copy AI code without understanding it
-- Ask for explanations of complex logic
-- Test the code before accepting it
+**Prompt/Request:** From the plan: flags `-f`, `-m`, `--stats`, `--limit`, `--export`, `--history-file`, `--seed`, `--no-color`; "Typing `exit`/`quit`, Ctrl+D or Ctrl+C ends the quiz cleanly: partial summary, history saved, exit 0"; "Corrupt history file → warning and fresh start, not a crash"; "Export failure → friendly error after the summary, exit 1".
 
-### 4. Iterate and Refine
-- Use follow-up questions to improve the code
-- Ask for alternative implementations
-- Request code reviews and suggestions
+**AI Response:** Claude generated the CLI layer and a smoke run worked. While planning the tests it noted two places it suspected, and wrote tests aimed at them. The first integration run then gave **10 failures out of 34**:
+- **Bug 1:** if `--history-file` pointed at a directory, the loader warned correctly, but `save()` then *renamed the user's directory to `somefolder.bak` and wrote a file in its place*. The "back up the corrupt file" logic checked `path.exists()` when it should have checked `path.is_file()`.
+- **Bug 2:** JSON export created missing parent folders (through `write_json_atomic`), but CSV export failed on them. Two exporters behind one factory behaved differently.
+- **Test mistakes (8 failures):** seven assertions hard-coded the summary table's padding, such as `"| Total Questions |     1 |"`. The padding changes with the widest value, and `100.0%` widened the column. One adaptive test also supplied a wrong final answer, so the card correctly came back a third time.
 
-### 5. Document Your Process
-- Keep detailed notes in this log
-- Explain your decision-making process
-- Track what works and what doesn't
+**Changes Made:**
+- `HistoryStore.save()` now renames only regular files. A directory is left untouched, the write fails with `OSError`, and `main` shows "Could not save history".
+- `CsvExporter` creates missing parent folders, like the JSON exporter.
+- Added a `summary_value()` helper that reads values from the table with a regex, and corrected the adaptive test's answers.
 
-## Common AI Collaboration Patterns
+**Reasoning:** Bug 1 could destroy user data, which is the worst kind of error-handling bug, because the code was trying to be careful. The test fixes were about testing behaviour, not formatting, so the tests can't break on a harmless layout change.
 
-### Code Generation
-- Initial implementation of classes/functions
-- Boilerplate code creation
-- Test case generation
+**Outcome:** Commit `f8bab2a`. All 123 tests passed, and adding unit tests for history sanitising, colour detection and table errors brought the suite to 167 tests with 100% line and branch coverage. `test_full_session` answers three questions (right, wrong, right) and checks Total 3, accuracy 66.7% and the missed term, both in the printed table and in the exported JSON.
 
-### Code Review
-- Ask AI to review your code for issues
-- Request suggestions for improvements
-- Get feedback on code structure
+**Lessons Learned:**
+- Defensive code needs tests for its unusual inputs. The bug sat inside the "handle a corrupt file safely" path itself.
+- A failing test is not always a code bug: 8 of these 10 were mistakes in the tests themselves. Each failure needs reading before anything is "fixed".
+- Scripted answers for adaptive mode have to account for repeats. An early smoke run got out of step for the same reason.
 
-### Problem Solving
-- Debugging help
-- Algorithm suggestions
-- Architecture advice
+---
 
-### Learning and Explanation
-- Ask for explanations of complex concepts
-- Request examples of design patterns
-- Get guidance on best practices
+## 2026-11-23 - Quality pass: formatter, linter, type checker and security lint
 
-## Reflection Questions
+**Context:** Phase 4 of the plan: every tool in the Definition of Done must pass on the whole codebase.
 
-As you work through the project, consider these questions:
+**AI Tool Used:** Claude Code
 
-1. **What types of tasks did AI help with most effectively?**
-2. **Where did you need to make the most modifications to AI suggestions?**
-3. **What patterns did you notice in AI strengths and weaknesses?**
-4. **How did your prompting technique improve over time?**
-5. **What would you do differently in future AI collaborations?**
+**Prompt/Request:** From the plan: "Quality pass: black, isort, flake8, mypy, bandit, coverage".
+
+**AI Response:** The first full run found: **black** would reformat 5 files; **flake8** reported 12 lines over 88 characters; **mypy** found a real typing error in `ui.py`, where the summary rows mixed `str` and `int` cells and were inferred as `list[object]`, which doesn't match `format_table`'s `Sequence[Sequence[object]]`. **bandit** was clean. Then a shell loop Claude wrote to re-run the tools reported black, isort, flake8 and mypy as FAIL. The cause was the loop itself: zsh doesn't split a variable into words, so the tools never ran.
+
+**Changes Made:**
+- Applied black, which also cleared the flake8 errors, and annotated the rows as `list[list[object]]`.
+- Re-ran bandit with `--ignore-nosec` to check whether the two `# nosec B311` comments were needed. Both suppress a real warning about using `random` to shuffle cards, so they stayed, each with a comment explaining that shuffling flashcards is not a security use of randomness.
+- Ignored the loop's false FAILs and ran each tool on its own command line to get real results.
+
+**Reasoning:** A suppression comment should be justified and proven necessary, or it hides future problems. A check that reports failure without running the tool is worse than no check.
+
+**Outcome:** black, isort, flake8, mypy (with `disallow_untyped_defs`, so every function is typed, tests included) and bandit all pass.
+
+**Lessons Learned:**
+- mypy found a type mismatch that no test would catch, because the code worked at runtime.
+- Check the checker: a surprising result from a script deserves a second look before acting on it.
+
+---
+
+## 2026-11-23 - Self-review against the code review checklist: 3 findings
+
+**Context:** With all tests and tools passing, Claude reviewed its own code with `ai_guidance/code_review_checklist.md`, especially "unvalidated input", "edge cases" and "what could go wrong with this code?".
+
+**AI Tool Used:** Claude Code
+
+**Prompt/Request:** From the plan: "self-review with the checklist; fix findings."
+
+**AI Response:** Three issues that the 167 passing tests didn't cover:
+1. **A card whose answer is `exit` or `quit` couldn't be answered.** The exit check ran before grading, so a correct answer ended the quiz.
+2. **Terminal escape injection.** Cards are printed straight to the terminal, so a deck from an untrusted source could include control characters such as `\x1b]0;…\x07` and rewrite the user's terminal (this one comes from the checklist's security section).
+3. **Stale `--stats` rows.** History is keyed by card front, so cards removed from a deck still appeared in its lifetime report.
+
+**Changes Made:**
+- `ConsoleUI.ask` treats `exit`/`quit` as a stop command only when it isn't the correct answer.
+- The loader rejects `front`/`back` text that contains control characters (Unicode category `Cc`: tabs, line breaks, escape codes), with a message that names the card.
+- `--stats` lists only cards that are still in the deck.
+- Added 6 tests. To prove they test the fixes, Claude stashed the three fixed source files and re-ran the tests on the old code: 5 of the new tests failed, as they should. The sixth, non-ASCII text such as `Straße`, is a guard that passes either way. With the fixes restored, all 173 passed.
+
+**Reasoning:** Passing tests only prove the cases someone thought of. A structured review asks the questions the tests didn't. Checking that new tests fail without the fix shows they test the fix rather than pass by accident.
+
+**Outcome:** Commit `bcb777d`: 173 tests, 100% coverage, all tools clean.
+
+**Lessons Learned:**
+- The checklist's security questions found an issue (escape codes in data) that no requirement mentioned.
+- Making a test fail on purpose is a cheap way to trust it.
+
+---
+
+## 2026-11-23 - Documentation from real output
+
+**Context:** Rewrite the README, write this log and draft the report.
+
+**AI Tool Used:** Claude Code
+
+**Prompt/Request:** From the plan: README with features, setup, usage for every flag, deck format, architecture diagram and quality commands; the log from what actually happened; a 1,000-1,500 word report; a text coverage report because `htmlcov/` is gitignored.
+
+**AI Response:** Claude ran the app to capture a real session and a real error message for the README, counted lines, classes and tests from the code, and saved the real coverage output to `docs/coverage_report.txt`. It wrote Mermaid class and flow diagrams and checked the report's length with `wc -w`.
+
+**Changes Made:** The README example session was adjusted only to show the typed answers, which a terminal displays but piped input does not.
+
+**Reasoning:** Documentation built from real runs can't promise features or numbers the code doesn't deliver.
+
+**Outcome:** README, this log, `docs/report.md` and `docs/coverage_report.txt`.
+
+**Lessons Learned:** Asking for the evidence (command output, counts) instead of a description keeps AI-written docs accurate.
+
+---
 
 ## Summary Statistics
 
-At the end of your project, fill out these statistics:
-
-- **Total AI interactions:** ___
-- **Lines of AI-generated code used:** ___
-- **Lines of AI-generated code modified:** ___
-- **Most helpful AI interaction:** ___
-- **Most challenging AI interaction:** ___
-- **Biggest lesson learned:** ___
-
----
-
-**Note:** This log is a required component of your final project report. Be thorough and honest in your documentation to demonstrate your learning process and AI collaboration skills.
+- **Total AI interactions:** 7 logged interactions over one session: 1 planning prompt with 4 clarifying questions, then 6 build/review phases, each committed separately
+- **Lines of AI-generated code used:** about 3,060 (1,538 application lines and 1,522 test lines). All code was generated by the AI; per the brief, problems were fixed by re-prompting or review, not by hand-editing
+- **Lines of AI-generated code modified:** 125 lines added and 26 removed in the quality and review commit (`bcb777d`), plus the two bug fixes and test corrections in the CLI commit (`f8bab2a`)
+- **Most helpful AI interaction:** the clarifying questions before any code, especially defining `--stats`
+- **Most challenging AI interaction:** the 10 integration failures, which had to be sorted into 2 real bugs and 8 test mistakes
+- **Biggest lesson learned:** green tests are not the finish line. The checklist review still found 3 real issues after 167 tests passed.
