@@ -1,0 +1,12 @@
+{
+  "cards": [
+    {"front": "Which command shows the state of the working tree?", "back": "git status"},
+    {"front": "Which command stages a file for the next commit?", "back": "git add"},
+    {"front": "Which command records staged changes in the repository?", "back": "git commit"},
+    {"front": "Which command downloads and merges changes from a remote?", "back": "git pull"},
+    {"front": "Which command uploads local commits to a remote?", "back": "git push"},
+    {"front": "Which command creates a local copy of a remote repository?", "back": "git clone"},
+    {"front": "Which command lists, creates or deletes branches?", "back": "git branch"},
+    {"front": "Which command shows the commit history?", "back": "git log"}
+  ]
+}
